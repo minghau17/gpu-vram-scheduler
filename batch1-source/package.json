@@ -1,0 +1,20 @@
+{
+  "name": "gpu-scheduler",
+  "productName": "GPU调度管理器",
+  "version": "3.0.0",
+  "description": "GPU 调度管理器 - 显存智能调度与释放量化",
+  "main": "electron/main.js",
+  "author": "GPU Scheduler",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "icons": "electron scripts/make-icons.js",
+    "build": "node scripts/build.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^45.2.3"
+  }
+}

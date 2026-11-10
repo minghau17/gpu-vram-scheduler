@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- 极光玻璃底：薄荷 → 天蓝 → 紫罗兰 -->
+    <linearGradient id="tile" x1="0.08" y1="0.02" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#6FE9D2"/>
+      <stop offset="0.42" stop-color="#6FA6FF"/>
+      <stop offset="0.72" stop-color="#9F8CFF"/>
+      <stop offset="1" stop-color="#C99BFF"/>
+    </linearGradient>
+    <radialGradient id="warm" cx="0.82" cy="0.12" r="0.62">
+      <stop offset="0" stop-color="#FFD6BC" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#FFC7D9" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFC7D9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cool" cx="0.12" cy="0.92" r="0.7">
+      <stop offset="0" stop-color="#3BE0C0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3BE0C0" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 玻璃高光 -->
+    <linearGradient id="gloss" x1="0.15" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.82"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- 芯片本体 -->
+    <linearGradient id="body" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#F7FAFF"/>
+      <stop offset="1" stop-color="#DFE9FF"/>
+    </linearGradient>
+    <!-- 内核：绿→蓝，代表从独显让位到核显 -->
+    <linearGradient id="die" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22D3A8"/>
+      <stop offset="0.55" stop-color="#3B9DF8"/>
+      <stop offset="1" stop-color="#6C63FF"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#2B2A6B" flood-opacity="0.30"/>
+    </filter>
+    <filter id="dieShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1B2A6B" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="tileClip">
+      <rect x="56" y="56" width="912" height="912" rx="232"/>
+    </clipPath>
+  </defs>
+
+  <!-- 玻璃底板 -->
+  <g>
+    <rect x="56" y="56" width="912" height="912" rx="232" fill="url(#tile)"/>
+  </g>
+  <g clip-path="url(#tileClip)">
+    <rect x="56" y="56" width="912" height="912" fill="url(#warm)"/>
+    <rect x="56" y="56" width="912" height="912" fill="url(#cool)"/>
+    <ellipse cx="300" cy="180" rx="470" ry="330" fill="url(#gloss)"/>
+  </g>
+  <!-- 内描边：玻璃边缘 -->
+  <rect x="60" y="60" width="904" height="904" rx="228" fill="none" stroke="#FFFFFF" stroke-opacity="0.62" stroke-width="8"/>
+
+  <g transform="translate(512 512) scale(1.05) translate(-512 -512)">
+  <!-- GPU 芯片：引脚 -->
+  <g fill="#FFFFFF" fill-opacity="0.92">
+    <rect x="286" y="404" width="58" height="30" rx="15"/>
+    <rect x="286" y="497" width="58" height="30" rx="15"/>
+    <rect x="286" y="590" width="58" height="30" rx="15"/>
+    <rect x="680" y="404" width="58" height="30" rx="15"/>
+    <rect x="680" y="497" width="58" height="30" rx="15"/>
+    <rect x="680" y="590" width="58" height="30" rx="15"/>
+    <rect x="404" y="286" width="30" height="58" rx="15"/>
+    <rect x="497" y="286" width="30" height="58" rx="15"/>
+    <rect x="590" y="286" width="30" height="58" rx="15"/>
+    <rect x="404" y="680" width="30" height="58" rx="15"/>
+    <rect x="497" y="680" width="30" height="58" rx="15"/>
+    <rect x="590" y="680" width="30" height="58" rx="15"/>
+  </g>
+
+  <!-- 芯片本体 -->
+  <rect x="322" y="322" width="380" height="380" rx="104" fill="url(#body)"/>
+  <rect x="330" y="330" width="364" height="364" rx="98" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="6"/>
+
+  <!-- 内核 -->
+  <rect x="392" y="392" width="240" height="240" rx="66" fill="url(#die)" filter="url(#dieShadow)"/>
+  <rect x="392" y="392" width="240" height="240" rx="66" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="5"/>
+
+  <!-- 内核里的“让位”箭头 -->
+  <g transform="translate(512 512)" fill="none" stroke="#FFFFFF" stroke-opacity="0.96"
+     stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-58 0 H22"/>
+    <path d="M-6 -34 L28 0 L-6 34"/>
+  </g>
+  </g>
+</svg>

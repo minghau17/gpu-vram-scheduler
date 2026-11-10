@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU 调度管理器 · 产品介绍</title>
+<style>
+/* ============================================================
+   GPU 调度管理器 · 网页版产品介绍
+   固定 1280×720 舞台，按视口等比缩放
+   ============================================================ */
+
+:root{
+  --bg:#0B0B0C;
+  --bg2:#0E0E10;
+  --ink:#F4F4F0;
+  --ink2:#A6A69F;
+  --ink3:#6B6B65;
+  --ink4:#4A4A46;
+  --line:rgba(255,255,255,.14);
+  --line2:rgba(255,255,255,.065);
+  --acid:#CDFF4A;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --mono:"JetBrains Mono",Consolas,"SFMono-Regular","Courier New",monospace;
+}
+
+*{box-sizing:border-box}
+figure{margin:0}
+img{max-width:100%}
+html,body{height:100%;margin:0;background:#050506;overflow:hidden}
+body{
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  user-select:none;
+  cursor:default;
+}
+body.hide-cursor{cursor:none}
+
+/* ---------- 舞台 ---------- */
+#stage{
+  position:absolute;left:50%;top:50%;
+  width:1280px;height:720px;
+  transform-origin:50% 50%;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* ---------- 背景 ---------- */
+.bg{position:absolute;inset:0;pointer-events:none}
+.bg .grid{
+  position:absolute;inset:-96px;
+  animation:gridDrift 52s linear infinite;
+  will-change:transform;
+  background-image:
+    linear-gradient(to right,rgba(255,255,255,.032) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(255,255,255,.032) 1px,transparent 1px);
+  background-size:80px 80px;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.72) 62%,rgba(0,0,0,.25) 100%);
+          mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.72) 62%,rgba(0,0,0,.25) 100%);
+}
+.bg .glow{
+  position:absolute;left:-260px;top:-320px;width:900px;height:900px;
+  background:radial-gradient(circle at 50% 50%,rgba(205,255,74,.075),rgba(205,255,74,0) 62%);
+  animation:glowPulse 9s ease-in-out infinite;
+}
+@keyframes gridDrift{from{transform:translate3d(0,0,0)}to{transform:translate3d(80px,80px,0)}}
+@keyframes glowPulse{0%,100%{opacity:.8;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
+.bg .edge{
+  position:absolute;inset:0;
+  background:radial-gradient(110% 100% at 100% 100%,rgba(255,255,255,.035),transparent 55%);
+}
+
+/* ---------- 光标光晕 ---------- */
+.cursor-glow{
+  position:absolute;left:0;top:0;width:620px;height:620px;
+  margin:-310px 0 0 -310px;pointer-events:none;
+  background:radial-gradient(circle,rgba(205,255,74,.075) 0%,rgba(205,255,74,.028) 36%,rgba(205,255,74,0) 66%);
+  opacity:0;transition:opacity .8s ease;
+}
+#stage:hover .cursor-glow{opacity:1}
+
+/* ---------- 翻页扫描线 ---------- */
+.sweep{position:absolute;left:0;right:0;top:-240px;height:240px;pointer-events:none;z-index:8;opacity:0}
+.sweep::before{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(to bottom,rgba(205,255,74,0) 0%,rgba(205,255,74,.022) 62%,rgba(205,255,74,.055) 100%);
+}
+.sweep::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+  background:var(--acid);opacity:.7;
+  box-shadow:0 0 16px 2px rgba(205,255,74,.32);
+}
+.sweep.run{animation:sweepRun .7s cubic-bezier(.42,0,.22,1) forwards}
+@keyframes sweepRun{
+  0%{opacity:0;transform:translateY(0)}
+  9%{opacity:1}
+  82%{opacity:1}
+  100%{opacity:0;transform:translateY(990px)}
+}
+
+/* ---------- 场景 ---------- */
+#scenes{position:absolute;inset:0}
+.scene{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  padding:58px 88px 46px;
+  opacity:0;visibility:hidden;
+  transform-origin:50% 42%;
+  transform:translateY(calc(var(--dir,1) * 46px)) scale(.972);
+  transition:opacity .18s linear,transform .72s var(--ease);
+  overflow:hidden;
+}
+.scene>*{flex-shrink:0}
+.scene.active{opacity:1;visibility:visible;transform:none}
+.scene.out{
+  opacity:0;
+  transform:translateY(calc(var(--dir,1) * -32px)) scale(.955);
+  transition:opacity .20s ease,transform .34s cubic-bezier(.4,0,.9,1);
+}
+
+/* ---------- 入场 ---------- */
+.reveal{clip-path:inset(0 100% -12% -2%)}
+.scene.active .reveal{animation:wipe .80s var(--ease) forwards;animation-delay:calc(var(--i,0) * 52ms + 30ms)}
+@keyframes wipe{
+  from{clip-path:inset(0 100% -12% -2%)}
+  to{clip-path:inset(0 -2% -12% -2%)}
+}
+
+.rise{opacity:0;transform:translateY(13px);perspective:1500px}
+/* 截图靠自己的透视揭示，外层不再叠加淡入 */
+.rise:has(> .shot),.rise:has(> .stack){opacity:1!important;transform:none!important;animation:none!important}
+.scene.active .rise{animation:riseIn .62s var(--ease) forwards;animation-delay:calc(var(--i,0) * 52ms + 100ms)}
+@keyframes riseIn{to{opacity:1;transform:none}}
+
+.rule{height:1px;background:var(--line);transform-origin:left;transform:scaleX(0)}
+.scene.active .rule{animation:grow .90s var(--ease) forwards;animation-delay:calc(var(--i,0) * 52ms + 150ms)}
+@keyframes grow{to{transform:scaleX(1)}}
+
+/* ---------- 页头 ---------- */
+.eyebrow{
+  display:flex;align-items:center;gap:13px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+  color:var(--ink3);text-transform:uppercase;
+}
+.eyebrow b{
+  color:var(--acid);font-weight:500;letter-spacing:.1em;
+  display:inline-block;
+  clip-path:inset(0 0 104% 0);
+  transform:translateY(-.55em);
+}
+.scene.active .eyebrow b{
+  animation:numIn .64s cubic-bezier(.16,1,.3,1) .04s forwards;
+}
+@keyframes numIn{
+  from{clip-path:inset(0 0 104% 0);transform:translateY(-.55em)}
+  to{clip-path:inset(-30% 0 -30% 0);transform:none}
+}
+.eyebrow i{
+  display:block;width:24px;height:1px;background:var(--acid);opacity:.75;
+  transform:scaleX(0);transform-origin:left;
+}
+.scene.active .eyebrow i{animation:lineGrow .62s cubic-bezier(.16,1,.3,1) .12s forwards}
+@keyframes lineGrow{to{transform:scaleX(1)}}
+h1{
+  margin:15px 0 0;
+  font-size:48px;line-height:1.18;font-weight:700;letter-spacing:-.022em;
+  max-width:1020px;
+  overflow:hidden;
+  padding-bottom:.09em;
+  margin-bottom:-.09em;
+  perspective:900px;
+}
+/* 逐字从遮罩下立起 */
+h1 .ch{
+  display:inline-block;
+  transform:translateY(108%) rotateX(-40deg);
+  transform-origin:50% 100%;
+  will-change:transform;
+}
+.scene.active h1 .ch{
+  animation:chIn .80s cubic-bezier(.16,1,.3,1) forwards;
+  animation-delay:calc(var(--i,0) * 52ms + var(--ci,0) * 16ms + 40ms);
+}
+@keyframes chIn{
+  from{transform:translateY(108%) rotateX(-40deg)}
+  to{transform:translateY(0) rotateX(0)}
+}
+h1 em{font-style:normal;color:var(--acid)}
+.lede{margin:14px 0 0;font-size:17.5px;line-height:1.78;color:var(--ink2);max-width:680px}
+
+/* ---------- 通用 ---------- */
+.mono{font-family:var(--mono)}
+.tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--ink4);text-transform:uppercase}
+
+/* ---------- 封面 ---------- */
+.s-cover{padding:0}
+.cover-mark{position:absolute;left:88px;top:60px;display:flex;align-items:center;gap:14px}
+.cover-mark img{width:42px;height:42px;display:block}
+.cover-mark span{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;color:var(--ink3)}
+.cover-main{position:absolute;left:88px;top:208px;width:820px}
+.cover-main .en{font-family:var(--mono);font-size:11px;letter-spacing:.34em;color:var(--acid)}
+.cover-main h1{
+  margin:18px 0 0;font-size:80px;line-height:1.06;letter-spacing:-.036em;font-weight:700;
+}
+.cover-crule{width:520px;margin:28px 0 0}
+.cover-main p{margin:22px 0 0;font-size:22px;line-height:1.6;color:#C6C6BF}
+.cover-sub{margin-top:12px!important;font-size:14px!important;color:#8C8C85!important;line-height:1.7!important}
+.cover-foot{
+  position:absolute;left:88px;right:88px;bottom:52px;
+  display:flex;align-items:flex-end;justify-content:space-between;
+}
+.cover-foot .meta{display:flex}
+.cover-foot .meta div{padding:0 34px;border-left:1px solid var(--line2)}
+.cover-foot .meta div:first-child{padding-left:0;border-left:0}
+.cover-foot .meta b{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.04em;font-weight:500}
+.cover-foot .meta span{display:block;font-size:12px;color:#8C8C85;margin-top:6px}
+.cover-foot .ver{font-family:var(--mono);font-size:10.5px;line-height:1.9;color:var(--ink3);letter-spacing:.1em;text-align:right}
+
+/* 封面右侧：显存分配条（装饰示意） */
+.alloc{position:absolute;right:96px;top:196px;width:146px}
+.alloc .cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--ink3)}
+.alloc .cells{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.alloc .cells i{
+  display:block;height:21px;background:#1E1E21;
+  border:1px solid rgba(255,255,255,.09);border-left:2px solid rgba(255,255,255,.22);
+}
+.alloc .cells i.f{
+  background:repeating-linear-gradient(135deg,rgba(205,255,74,.34) 0 5px,rgba(205,255,74,.07) 5px 10px);
+  border-color:rgba(205,255,74,.32);border-left-color:var(--acid);
+}
+.alloc .foot{margin-top:16px;padding-top:12px;border-top:1px solid var(--line2);
+  font-family:var(--mono);font-size:9.5px;line-height:2;letter-spacing:.06em;color:var(--ink3)}
+.alloc .foot b{display:block;color:var(--acid);font-weight:400}
+
+.watermark{display:none}
+.vline{position:absolute;left:924px;top:0;bottom:0;width:1px;
+  background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.13) 22%,rgba(255,255,255,.13) 78%,rgba(255,255,255,0))}
+
+/* ---------- 两栏 ---------- */
+.split{display:grid;align-items:start;margin-top:auto;margin-bottom:auto;padding-top:22px}
+.split.mid{align-items:center}
+
+/* ---------- 编号步骤 ---------- */
+.steps{margin-top:0}
+.step{
+  display:grid;grid-template-columns:40px 1fr;gap:16px;
+  padding:21px 0;border-top:1px solid var(--line2);
+}
+.step:last-child{border-bottom:1px solid var(--line2)}
+.step.rise,.feat .item.rise,.limits div.rise{
+  clip-path:inset(0 0 102% 0);opacity:1;transform:none;
+}
+.scene.active .step.rise,
+.scene.active .feat .item.rise,
+.scene.active .limits div.rise{
+  animation:stripIn .74s cubic-bezier(.16,1,.3,1) forwards;
+  animation-delay:calc(var(--i,0) * 52ms + 80ms);
+}
+@keyframes stripIn{
+  from{clip-path:inset(0 0 102% 0)}
+  to{clip-path:inset(0 0 -12% 0)}
+}
+.step .n{font-family:var(--mono);font-size:11.5px;color:var(--acid);padding-top:5px;letter-spacing:.06em}
+.step h3{margin:0;font-size:17.5px;font-weight:600;letter-spacing:-.005em}
+.step p{margin:7px 0 0;font-size:14.5px;line-height:1.75;color:var(--ink2)}
+.step .spec{margin-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink4)}
+
+/* ---------- 显存分片示意 ---------- */
+.vram{width:100%}
+.vram .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px}
+.vram .top span{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--ink3)}
+.vram .bar{display:flex;height:120px;border:1px solid var(--line);overflow:hidden}
+.vram .bar i{display:block;height:100%;width:0;overflow:hidden;border-right:1px solid rgba(0,0,0,.55);position:relative;background:var(--c)}
+.scene.active .vram .bar i{animation:barIn .78s var(--ease) forwards;animation-delay:calc(var(--bi,0) * 66ms + .24s)}
+@keyframes barIn{from{width:0}to{width:var(--w)}}
+.vram .bar i:last-child{border-right:0}
+.vram .bar i.free{
+  background:repeating-linear-gradient(135deg,rgba(205,255,74,.3) 0 6px,rgba(205,255,74,.06) 6px 12px);
+  background-size:16.97px 16.97px;
+}
+.scene.active .vram .bar i.free{
+  animation-name:barIn,stripeFlow;
+  animation-duration:.78s,3.4s;
+  animation-timing-function:cubic-bezier(.16,1,.3,1),linear;
+  animation-fill-mode:forwards,none;
+  animation-iteration-count:1,infinite;
+  animation-delay:calc(var(--bi,0) * 66ms + .24s),1.3s;
+}
+@keyframes stripeFlow{to{background-position:16.97px 0}}
+.vram .bar i span{
+  position:absolute;left:9px;bottom:9px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.08em;color:rgba(255,255,255,.8);white-space:nowrap;
+}
+.vram .bar i.free span{color:#0B0B0C;background:var(--acid);padding:3px 7px;left:10px;bottom:10px;letter-spacing:.06em}
+.vram .legend{display:flex;justify-content:space-between;margin-top:11px;font-size:11px;color:var(--ink3);line-height:1.6}
+.vram .legend b{color:var(--ink2);font-weight:500}
+
+/* ---------- 三件事 ---------- */
+.three{display:grid;grid-template-columns:repeat(3,1fr);margin:auto 0;border-top:1px solid var(--line)}
+.three>div{padding:42px 42px 10px 0;border-right:1px solid var(--line2)}
+.three>div:last-child{border-right:0;padding-right:0}
+.three .no{
+  font-family:var(--mono);font-size:56px;font-weight:700;line-height:1;
+  color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.3);
+}
+.three h3{margin:24px 0 0;font-size:26px;font-weight:600;letter-spacing:-.01em}
+.three p{margin:13px 0 0;font-size:15px;line-height:1.8;color:var(--ink2);max-width:280px}
+.three .spec{margin-top:24px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--acid);opacity:.85}
+
+/* ---------- 代码块 ---------- */
+.code{
+  margin-top:24px;border:1px solid var(--line);background:var(--bg2);
+  padding:22px 24px;font-family:var(--mono);font-size:12.8px;line-height:2.1;
+  color:#B7B7B0;white-space:pre;overflow:hidden;
+  clip-path:inset(0 100% 0 0);
+}
+.scene.active .code{animation:codeIn 1.05s cubic-bezier(.32,1,.42,1) .3s forwards}
+@keyframes codeIn{to{clip-path:inset(0 0 0 0)}}
+.code .c{color:#585853}
+.code .k{color:#87877F}
+.code .a{color:var(--acid)}
+.code .w{color:#E6E6DF}
+
+/* ---------- 表格 ---------- */
+table{width:100%;border-collapse:collapse;margin:auto 0}
+th{
+  text-align:left;padding:0 0 11px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.16em;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--line);
+}
+td{
+  padding:26px 26px 26px 0;font-size:15px;line-height:1.7;color:var(--ink2);
+  border-bottom:1px solid var(--line2);vertical-align:top;
+}
+td:first-child{width:140px;color:var(--ink);font-weight:600;font-size:16.5px}
+td .m{font-family:var(--mono);color:var(--ink);font-size:13.5px;letter-spacing:.02em}
+tr.hi td:first-child{color:var(--acid)}
+tr.rise{opacity:0;transform:translateX(-26px)}
+.scene.active tr.rise{
+  animation:rowIn .72s cubic-bezier(.16,1,.3,1) forwards;
+  animation-delay:calc(var(--i,0) * 64ms + 120ms);
+}
+@keyframes rowIn{to{opacity:1;transform:none}}
+.scene.active tr.hi{animation:rowIn .72s cubic-bezier(.16,1,.3,1) forwards,rowFlash 1.4s ease .95s forwards;
+  animation-delay:calc(var(--i,0) * 64ms + 120ms),.95s}
+@keyframes rowFlash{0%{background:rgba(205,255,74,.13)}100%{background:transparent}}
+
+/* ---------- 截图 ---------- */
+.shot{
+  border:1px solid rgba(255,255,255,.2);background:#000;overflow:hidden;line-height:0;
+  clip-path:inset(0 0 101% 0);
+  transform-origin:50% 100%;
+  transform:rotateX(9deg) translateY(30px) scale(.975);
+}
+.scene.active .shot{
+  animation:shotIn .95s cubic-bezier(.16,1,.3,1) forwards;
+  animation-delay:.16s;
+}
+@keyframes shotIn{
+  from{clip-path:inset(0 0 101% 0);transform:rotateX(9deg) translateY(30px) scale(.975)}
+  to{clip-path:inset(0 0 0 0);transform:none}
+}
+.shot img{transform:scale(1.05);will-change:transform}
+.scene.active .shot img{animation:imgSettle 1.45s var(--ease) forwards;animation-delay:.16s}
+@keyframes imgSettle{to{transform:scale(1)}}
+.shot.dk{border-color:rgba(255,255,255,.34);box-shadow:0 0 0 1px rgba(255,255,255,.06),0 40px 80px -40px rgba(150,140,255,.5)}
+.stack{position:relative}
+.stack .main{width:100%}
+.stack .mini{
+  position:absolute;right:-22px;bottom:-24px;width:198px;
+  border:1px solid rgba(255,255,255,.3);line-height:0;background:#000;
+  box-shadow:0 26px 50px -22px rgba(0,0,0,.95),0 0 0 6px rgba(11,11,12,.9);
+}
+.shot img{display:block;width:100%}
+.shot-cap{margin-top:12px;display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:#6E6E68}
+.shot-cap b{color:#969690;font-weight:400}
+
+/* ---------- KPI ---------- */
+.kpis{margin-top:2px}
+.kpi{padding:21px 0;border-top:1px solid var(--line2)}
+.kpi:last-child{border-bottom:1px solid var(--line2)}
+.kpi .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--acid);opacity:.8}
+.kpi h4{margin:8px 0 0;font-size:18px;font-weight:600}
+.kpi p{margin:7px 0 0;font-size:14.5px;line-height:1.7;color:var(--ink2)}
+
+/* ---------- 时间轴 ---------- */
+.tl{position:relative;margin-top:30px;padding-top:2px}
+.tl .line{position:absolute;left:0;right:25%;top:9px;height:1px;background:var(--line)}
+.tl .line i{position:absolute;left:0;top:0;height:1px;background:var(--acid);width:0;
+  box-shadow:0 0 10px rgba(205,255,74,.45);
+  animation:tlfill 1.9s cubic-bezier(.16,1,.3,1) .40s forwards}
+@keyframes tlfill{to{width:100%}}
+.tl .nodes{display:grid;grid-template-columns:repeat(4,1fr)}
+.tl .node{position:relative;padding-top:24px}
+.tl .node .dot{
+  position:absolute;left:0;top:5px;width:8px;height:8px;display:block;
+  background:var(--bg);border:1px solid var(--ink4);border-radius:50%;
+  transform:scale(0);
+}
+.tl .node:first-child .dot{border-color:var(--acid);background:var(--acid)}
+.scene.active .tl .node .dot{
+  animation:dotIn .46s var(--ease) forwards;
+  animation-delay:calc(var(--ni,0) * 480ms + .40s);
+}
+@keyframes dotIn{
+  0%{transform:scale(0);box-shadow:0 0 0 0 rgba(205,255,74,.55)}
+  62%{transform:scale(1.7);box-shadow:0 0 0 6px rgba(205,255,74,0)}
+  100%{transform:scale(1);box-shadow:0 0 0 0 rgba(205,255,74,0)}
+}
+.tl .node b{display:block;font-family:var(--mono);font-size:10px;color:var(--ink4);font-weight:400;letter-spacing:.14em}
+.tl .node span{display:block;margin-top:6px;font-size:14.5px;font-weight:600}
+.tl .node em{display:block;margin-top:5px;font-family:var(--mono);font-size:10.5px;color:var(--ink3);font-style:normal}
+
+/* ---------- 功能列表 ---------- */
+.feat{margin-top:4px}
+.feat .item{display:grid;grid-template-columns:32px 1fr;gap:14px;padding:21px 0;border-top:1px solid var(--line2)}
+.feat .item:last-child{border-bottom:1px solid var(--line2)}
+.feat .item .k{font-family:var(--mono);font-size:11px;color:var(--ink4);padding-top:4px}
+.feat .item h4{margin:0;font-size:16.5px;font-weight:600}
+.feat .item p{margin:6px 0 0;font-size:14px;line-height:1.7;color:var(--ink2)}
+
+/* ---------- 限制清单 ---------- */
+.limits{margin-top:14px;border-top:1px solid var(--line)}
+.limits div{display:grid;grid-template-columns:22px 1fr;gap:12px;padding:19px 0;border-bottom:1px solid var(--line2);font-size:13.5px;line-height:1.7;color:var(--ink2)}
+.limits em{font-style:normal;color:var(--ink4);font-family:var(--mono);font-size:11px}
+
+/* 结尾页：行距更松 */
+.steps.big .step{padding:30px 0}
+.steps.big .step h3{font-size:19px}
+.steps.big .step p{font-size:15px;margin-top:8px}
+.limits.big div{padding:26px 0;font-size:14.5px}
+
+/* ---------- 底部一句话 ---------- */
+.footline{
+  margin-top:0;padding-top:18px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:40px;
+  border-top:1px solid var(--line);
+}
+.footline span{font-size:13px;color:var(--ink3);line-height:1.6}
+.footline b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--ink4);font-weight:400;flex:none}
+
+/* ---------- 提示 ---------- */
+.hint{
+  position:absolute;left:88px;bottom:14px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--ink4);
+  opacity:0;transform:translateY(4px);transition:opacity .4s,transform .4s;pointer-events:none;
+}
+.hint.show{opacity:1;transform:none}
+
+/* ---------- 静态模式：用于截图与打印 ---------- */
+html.static .reveal{clip-path:none!important;animation:none!important}
+html.static .rise{opacity:1!important;transform:none!important;animation:none!important}
+html.static .rule{transform:scaleX(1)!important;animation:none!important}
+html.static .tl .line i{width:100%!important;animation:none!important}
+html.static .scene{transition:none!important;opacity:1!important;visibility:visible!important;transform:none!important}
+html.static .scene:not(.active){display:none}
+html.static .hint{display:none!important}
+html.static h1 .ch{transform:none!important;animation:none!important}
+html.static .shot{clip-path:none!important;transform:none!important;animation:none!important}
+html.static .shot img{transform:none!important;animation:none!important}
+html.static .vram .bar i{width:var(--w)!important;animation:none!important}
+html.static .tl .node .dot{transform:none!important;animation:none!important}
+html.static .sweep,html.static .cursor-glow{display:none!important}
+html.static .step.rise,html.static .feat .item.rise,html.static .limits div.rise,
+html.static tr.rise,html.static .eyebrow b{clip-path:none!important;opacity:1!important;transform:none!important;animation:none!important}
+html.static .bg .grid,html.static .bg .glow,html.static .vram .bar i.free{animation:none!important}
+html.static .code{clip-path:none!important;animation:none!important}
+html.static .eyebrow i{transform:none!important;animation:none!important}
+
+@media (prefers-reduced-motion:reduce){
+  .scene,.scene.active,.rise,.reveal,.rule,h1 .ch,.shot,.shot img,.vram .bar i,.tl .node .dot,.eyebrow b,.eyebrow i,.code,tr.rise{
+    transition-duration:.01ms!important;animation-duration:.01ms!important;
+  }
+  .code{clip-path:none!important}
+  .eyebrow i{transform:none!important}
+  .eyebrow b{clip-path:none!important;transform:none!important}
+  h1 .ch{transform:none!important}
+  .shot{clip-path:none!important}
+  .vram .bar i{width:var(--w)!important}
+  .tl .node .dot{transform:none!important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bg"><div class="glow"></div><div class="grid"></div><div class="edge"></div></div>
+  <div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+
+  <div id="scenes">
+
+    <!-- 01 封面 -->
+    <section class="scene s-cover active">
+      <div class="cover-mark rise" style="--i:0">
+        <img src="assets/icon-1024.png" alt="">
+        <span>WINDOWS 10 / 11</span>
+      </div>
+
+      <div class="cover-main">
+        <div class="en rise" style="--i:1">GPU SCHEDULER</div>
+        <h1 style="--i:2">GPU 调度管理器</h1>
+        <div class="cover-crule rule" style="--i:3"></div>
+        <p class="rise" style="--i:4">让显存留给真正在跑的程序。</p>
+        <p class="cover-sub rise" style="--i:5">后台程序切到核显，独显的显存回到前台程序手里。</p>
+      </div>
+
+      <div class="alloc rise" style="--i:3" aria-hidden="true">
+        <div class="cap">DEDICATED VRAM</div>
+        <div class="cells">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i class="f"></i><i class="f"></i><i class="f"></i>
+        </div>
+        <div class="foot"><b>斜纹：可以腾给前台</b>灰格：正被进程持有</div>
+      </div>
+
+      <div class="vline rise" style="--i:5" aria-hidden="true"></div>
+
+      <div class="cover-foot rise" style="--i:6">
+        <div class="meta">
+          <div><b>显存调度</b><span>把后台程序挪到核显</span></div>
+          <div><b>收益量化</b><span>重启前后采样相减</span></div>
+          <div><b>随时回退</b><span>只改当前用户的设置</span></div>
+        </div>
+        <div class="ver">v3.0<br>免安装</div>
+      </div>
+    </section>
+
+    <!-- 02 问题 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>02</b><i></i>问题</div>
+      <h1 style="--i:1">每张显卡上，都有一批程序在占着位置</h1>
+      <p class="lede rise" style="--i:2">桌面、浏览器、聊天工具、壁纸、驱动面板——它们不一定在画东西，但都向显卡要了一块显存，而且不会主动还。</p>
+
+      <div class="split mid" style="grid-template-columns:440px 1fr;gap:64px">
+        <div class="steps">
+          <div class="step rise" style="--i:3">
+            <div class="n">01</div>
+            <div><h3>启动就分配</h3><p>程序打开时向显卡申请显存，之后一直持有。</p></div>
+          </div>
+          <div class="step rise" style="--i:4">
+            <div class="n">02</div>
+            <div><h3>后台不释放</h3><p>最小化、切到别的窗口，占用的那部分不会自己还回来。</p></div>
+          </div>
+          <div class="step rise" style="--i:5">
+            <div class="n">03</div>
+            <div><h3>一个个点太慢</h3><p>Windows 的图形设置里，每个程序都要单独点一次，还得知道它装在哪。</p></div>
+          </div>
+        </div>
+
+        <div class="vram rise" style="--i:4">
+          <div class="top"><span>一块显卡的显存去向</span><span>示意图</span></div>
+          <div class="bar">
+            <i style="--c:#2B2B2E;--w:23%;--bi:0"><span>桌面合成</span></i>
+            <i style="--c:#333336;--w:18%;--bi:1"><span>浏览器</span></i>
+            <i style="--c:#3C3C40;--w:15%;--bi:2"><span>聊天 · 壁纸</span></i>
+            <i style="--c:#55555A;--w:28%;--bi:3"><span>前台程序</span></i>
+            <i class="free" style="--w:16%;--bi:4"><span>可腾出</span></i>
+          </div>
+          <div class="legend">
+            <span>这些进程不画一帧，也占着位置</span>
+            <b>同一块显存，被分片持有</b>
+          </div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:7">
+        <span>核显和独显同时存在时，Windows 默认让程序自己选，而多数程序选了独显。</span>
+        <b>02 / 10</b>
+      </div>
+    </section>
+
+    <!-- 03 三件事 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>03</b><i></i>做法</div>
+      <h1 style="--i:1">看、改、量</h1>
+      <p class="lede rise" style="--i:2">整个工具只做三件事，每一件都能自己核对。</p>
+
+      <div class="three">
+        <div class="rise" style="--i:3">
+          <div class="no">01</div>
+          <h3>看</h3>
+          <p>读整卡占用，也读每个进程的占用。排序之后，谁在吃一眼看得出来。</p>
+          <div class="spec">PDH 计数器 + NVML · 每 2 秒</div>
+        </div>
+        <div class="rise" style="--i:4">
+          <div class="no">02</div>
+          <h3>改</h3>
+          <p>把选中的程序写成「节能」，下次启动它就落在核显上。</p>
+          <div class="spec">HKCU · UserGpuPreferences</div>
+        </div>
+        <div class="rise" style="--i:5">
+          <div class="no">03</div>
+          <h3>量</h3>
+          <p>重启前后各采一段整卡占用，相减得到这一次真正释放了多少。</p>
+          <div class="spec">A/B 采样 · 带置信度</div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:6">
+        <span>不接管渲染，不注入进程，不装驱动。改的是 Windows 自己的一份偏好。</span>
+        <b>03 / 10</b>
+      </div>
+    </section>
+
+    <!-- 04 边界 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>04</b><i></i>边界</div>
+      <h1 style="--i:1">改的是 Windows 自己的开关</h1>
+      <p class="lede rise" style="--i:2">不是本工具的私有配置。系统设置里能看到同一份，想换回来也一样。</p>
+
+      <div class="split" style="grid-template-columns:1fr 552px;gap:56px">
+        <div class="steps">
+          <div class="step rise" style="--i:3">
+            <div class="n">01</div>
+            <div><h3>同一份设置</h3><p>位置就是「设置 → 系统 → 显示 → 图形」在用的那份，任务管理器里也认。</p></div>
+          </div>
+          <div class="step rise" style="--i:4">
+            <div class="n">02</div>
+            <div><h3>只动当前用户</h3><p>写 HKCU，不申请管理员，不改系统级策略，不碰驱动。</p></div>
+          </div>
+          <div class="step rise" style="--i:5">
+            <div class="n">03</div>
+            <div><h3>随时撤回</h3><p>在列表里点回「自动」，那条注册表项就被删掉，恢复系统默认。</p></div>
+          </div>
+        </div>
+
+        <div class="rise" style="--i:4">
+          <div class="code">
+<span class="c">; 注册表里的实际写法</span>
+<span class="k">HKEY_CURRENT_USER\Software\Microsoft\DirectX</span>
+<span class="k">  \UserGpuPreferences</span>
+
+  <span class="w">"E:\Games\game.exe"</span>   = <span class="a">"GpuPreference=2;"</span>  <span class="c">; 高性能</span>
+  <span class="w">"C:\...\WeChat.exe"</span>   = <span class="a">"GpuPreference=1;"</span>  <span class="c">; 节能 → 核显</span>
+  <span class="w">"C:\...\chrome.exe"</span>   = <span class="a">"GpuPreference=0;"</span>  <span class="c">; 自动</span>
+          </div>
+          <div class="shot-cap" style="margin-top:11px">
+            <b>值名是 exe 全路径，其它键值原样保留</b>
+            <span>不碰其它程序</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:6">
+        <span>偏好只在程序启动时读取一次，所以改完要重启那个程序——这也是它可逆的原因。</span>
+        <b>04 / 10</b>
+      </div>
+    </section>
+
+    <!-- 05 概览 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>05</b><i></i>界面 · 概览</div>
+      <h1 style="--i:1">打开就能看到三个数</h1>
+      <p class="lede rise" style="--i:2">不用先跑一轮。整卡用了多少、有多少写了还没生效、还有多少能腾，都在第一屏。</p>
+
+      <div class="split mid" style="grid-template-columns:1fr 520px;gap:60px">
+        <div class="kpis">
+          <div class="kpi rise" style="--i:3">
+            <div class="l">VRAM USED</div>
+            <h4>整卡占用</h4>
+            <p>直接读 NVML，和任务管理器显示的一致。</p>
+          </div>
+          <div class="kpi rise" style="--i:4">
+            <div class="l">PENDING</div>
+            <h4>待生效</h4>
+            <p>偏好已经写进去了，但程序还在跑旧进程。</p>
+          </div>
+          <div class="kpi rise" style="--i:5">
+            <div class="l">RECLAIMABLE</div>
+            <h4>可释放</h4>
+            <p>规则判断适合走核显、还没迁的后台程序。</p>
+          </div>
+        </div>
+
+        <div class="rise" style="--i:4">
+          <div class="shot"><img src="assets/03-dashboard.png" alt="概览页"></div>
+          <div class="shot-cap"><b>概览</b><span>实时曲线 · 占用 Top · 建议迁移</span></div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:6">
+        <span>整卡数据每 2 秒刷新，曲线保留最近五分钟；三项指标的口径在第 08 页拆开讲。</span>
+        <b>05 / 10</b>
+      </div>
+    </section>
+
+    <!-- 06 调度 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>06</b><i></i>界面 · 调度</div>
+      <h1 style="--i:1">一次勾选，批量迁移</h1>
+      <p class="lede rise" style="--i:2">按占用排序，把要挪走的程序勾上，一次写完，不用逐个点进系统设置。</p>
+
+      <div class="split mid" style="grid-template-columns:520px 1fr;gap:60px">
+        <div class="rise" style="--i:3">
+          <div class="shot"><img src="assets/03-apps.png" alt="应用调度页"></div>
+          <div class="shot-cap"><b>应用调度</b><span>按占用排序 · 支持搜索与分类</span></div>
+        </div>
+
+        <div class="steps">
+          <div class="step rise" style="--i:4">
+            <div class="n">01</div>
+            <div><h3>逐程序占用</h3><p>按显存大小排，谁在吃一眼看得出来。</p></div>
+          </div>
+          <div class="step rise" style="--i:5">
+            <div class="n">02</div>
+            <div><h3>多选后一次写入</h3><p>勾一个和勾八个，都是一次提交。</p></div>
+          </div>
+          <div class="step rise" style="--i:6">
+            <div class="n">03</div>
+            <div><h3>先给清单再执行</h3><p>智能优化会列出准备改哪些、各占多少，确认之后才写。</p></div>
+          </div>
+          <div class="step rise" style="--i:7">
+            <div class="n">04</div>
+            <div><h3>读不到路径的不列</h3><p>没有 exe 路径就写不进偏好，这类进程直接隐藏。</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:6">
+        <span>写入是即时的，生效要等这些程序下一次启动；列表里会一直标着「待重启」，直到进程真的换了。</span>
+        <b>06 / 10</b>
+      </div>
+    </section>
+
+    <!-- 07 实测 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>07</b><i></i>界面 · 实测</div>
+      <h1 style="--i:1">省了多少，用两次采样算</h1>
+      <p class="lede rise" style="--i:2">不估、不猜。跑一次 A/B，把前后的整卡占用相减。</p>
+
+      <div class="tl">
+        <div class="line"><i></i></div>
+        <div class="nodes">
+          <div class="node rise" style="--i:3;--ni:0"><i class="dot"></i><b>STEP 01</b><span>基线采样</span><em>15 秒 · 每 2 秒一次</em></div>
+          <div class="node rise" style="--i:4;--ni:1"><i class="dot"></i><b>STEP 02</b><span>写入偏好</span><em>GpuPreference = 1</em></div>
+          <div class="node rise" style="--i:5;--ni:2"><i class="dot"></i><b>STEP 03</b><span>等程序重启</span><em>检测 PID 变化</em></div>
+          <div class="node rise" style="--i:6;--ni:3"><i class="dot"></i><b>STEP 04</b><span>复采并相减</span><em>均值差 · 附置信度</em></div>
+        </div>
+      </div>
+
+      <div class="split mid" style="grid-template-columns:1fr 360px;gap:56px;margin-top:26px">
+        <div class="steps">
+          <div class="step rise" style="--i:7">
+            <div class="n">01</div>
+            <div><h3>确认真的重启了</h3><p>只看 PID 有没有变，没变就继续等，不提前下结论。</p></div>
+          </div>
+          <div class="step rise" style="--i:8">
+            <div class="n">02</div>
+            <div><h3>给一个置信度</h3><p>按采样波动算：噪声小记「高」，波动大就标「低」。</p></div>
+          </div>
+          <div class="step rise" style="--i:9">
+            <div class="n">03</div>
+            <div><h3>没重启只给估算</h3><p>页面会写明这是估算，不当作结果记录。</p></div>
+          </div>
+        </div>
+
+        <div class="rise" style="--i:8">
+          <div class="shot"><img src="assets/03-insights.png" alt="收益实测页"></div>
+          <div class="shot-cap"><b>收益实测</b><span>每次结果都留档</span></div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:10">
+        <span>每条记录包含时间、程序、前后均值与置信度，可以导出成 Markdown 带走。</span>
+        <b>07 / 10</b>
+      </div>
+    </section>
+
+    <!-- 08 口径 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>08</b><i></i>口径</div>
+      <h1 style="--i:1">列表里各项相加，会比整卡已用大</h1>
+      <p class="lede rise" style="--i:2">这不是 bug。逐进程计数器报的是提交量，桌面合成会把桌面缓冲重复计入。所以三个数字分开算，谁也不冒充谁。</p>
+
+      <table>
+        <tr>
+          <th>指标</th><th style="width:210px">数据来源</th><th>它能说明什么</th>
+        </tr>
+        <tr class="rise" style="--i:3">
+          <td>待生效</td>
+          <td><span class="m">逐进程计数器</span></td>
+          <td>偏好已写、程序还没重启的那部分占用。重启后才有可能变成真的释放。</td>
+        </tr>
+        <tr class="rise" style="--i:4">
+          <td>可释放</td>
+          <td><span class="m">规则预估</span></td>
+          <td>还能迁多少。是估算，用来决定下一步做什么，不写进结果。</td>
+        </tr>
+        <tr class="hi rise" style="--i:5">
+          <td>已实测</td>
+          <td><span class="m">整卡 A/B 采样</span></td>
+          <td>重启前后两次均值相减。只有这个算「释放」，另外两个都是参考。</td>
+        </tr>
+      </table>
+
+      <div class="footline rise" style="--i:6">
+        <span>每个数字都标了来源，点开能看到采样时刻。和任务管理器对不上的地方，界面会直接写明原因。</span>
+        <b>08 / 10</b>
+      </div>
+    </section>
+
+    <!-- 09 其他 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>09</b><i></i>其他</div>
+      <h1 style="--i:1">还有几个省事的</h1>
+
+      <div class="split mid" style="grid-template-columns:1fr 470px;gap:56px">
+        <div class="feat">
+          <div class="item rise" style="--i:2">
+            <div class="k">A</div>
+            <div><h4>显存预算</h4><p>说清楚跑某个体量的东西还差多少、该迁哪几个。</p></div>
+          </div>
+          <div class="item rise" style="--i:3">
+            <div class="k">B</div>
+            <div><h4>自动分流</h4><p>新程序第一次出现时，按规则给出走哪块卡的建议。</p></div>
+          </div>
+          <div class="item rise" style="--i:4">
+            <div class="k">C</div>
+            <div><h4>报告导出</h4><p>一次实测导出成 Markdown，带时间、明细和置信度。</p></div>
+          </div>
+          <div class="item rise" style="--i:5">
+            <div class="k">D</div>
+            <div><h4>深浅双主题</h4><p>两套配色分别调过对比度，夜里看着不刺眼。</p></div>
+          </div>
+        </div>
+
+        <div class="rise" style="--i:4">
+          <div class="stack">
+            <div class="shot main"><img src="assets/03-settings.png" alt="设置页"></div>
+            <div class="mini"><img src="assets/04-dark.png" alt="深色主题"></div>
+          </div>
+          <div class="shot-cap" style="margin-top:48px"><b>设置 · 深浅两套配色</b><span>数据源与采样耗时直接摊开</span></div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:6">
+        <span>所有采集都在本地完成，不上传进程名，不请求任何在线接口。</span>
+        <b>09 / 10</b>
+      </div>
+    </section>
+
+    <!-- 10 开始 -->
+    <section class="scene">
+      <div class="eyebrow rise" style="--i:0"><b>10</b><i></i>开始</div>
+      <h1 style="--i:1">装上，试一次</h1>
+
+      <div class="split" style="grid-template-columns:1fr 470px;gap:64px;margin:auto 0">
+        <div class="steps big">
+          <div class="step rise" style="--i:2">
+            <div class="n">01</div>
+            <div><h3>双击打开</h3><p>免安装，不写系统目录，删掉文件夹就干净了。</p></div>
+          </div>
+          <div class="step rise" style="--i:3">
+            <div class="n">02</div>
+            <div><h3>在应用调度里勾几个</h3><p>挑那些不在前台、又占着显存的，点应用。</p></div>
+          </div>
+          <div class="step rise" style="--i:4">
+            <div class="n">03</div>
+            <div><h3>重启它们，回来看差值</h3><p>跑一次实测，数字会留在「收益实测」页里。</p></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="tag rise" style="--i:3">需要知道的</div>
+          <div class="limits big">
+            <div class="rise" style="--i:4"><em>01</em><span>显卡偏好只在程序启动时读取，改完必须重启那个程序。</span></div>
+            <div class="rise" style="--i:5"><em>02</em><span>逐进程数字是提交量，可能与整卡读数不一致，界面里已注明。</span></div>
+            <div class="rise" style="--i:6"><em>03</em><span>只对同时有核显和独显的机器有意义；纯独显台式机没有可迁的去处。</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footline rise" style="--i:7">
+        <span>GPU 调度管理器 · v3.0</span>
+        <b>10 / 10</b>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="sweep" id="sweep" aria-hidden="true"></div>
+
+  <div class="hint" id="hint">→ 翻页 · F 全屏 · R 自动播放</div>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const scenes = Array.from(document.querySelectorAll('.scene'));
+  const total = scenes.length;
+  const hint = document.getElementById('hint');
+  let current = 0, busy = false, autoOn = false, autoTimer = null;
+
+  const QS = new URLSearchParams(location.search);
+  const STATIC = QS.has('static');
+  if (STATIC) document.documentElement.classList.add('static');
+
+  /* ---------- 舞台缩放 ---------- */
+  function fit(){
+    const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  /* ---------- 标题逐字拆分 ---------- */
+  const CH_RE = /[A-Za-z0-9]+|\s+|[^\s]/g;
+  scenes.forEach((sc) => {
+    sc.querySelectorAll('h1').forEach((h) => {
+      if (h.dataset.split) return;
+      const raw = h.textContent;
+      h.textContent = '';
+      (raw.match(CH_RE) || []).forEach((part) => {
+        if (/^\s+$/.test(part)) { h.appendChild(document.createTextNode(part)); return; }
+        const sp = document.createElement('span');
+        sp.className = 'ch';
+        sp.style.setProperty('--ci', h.childElementCount);
+        sp.textContent = part;
+        h.appendChild(sp);
+      });
+      h.dataset.split = '1';
+    });
+  });
+
+  /* ---------- 翻页扫描线 ---------- */
+  const sweepEl = document.getElementById('sweep');
+  function sweep(){
+    if (STATIC || !sweepEl) return;
+    sweepEl.classList.remove('run');
+    void sweepEl.offsetWidth;
+    sweepEl.classList.add('run');
+  }
+
+  /* ---------- 数字滚动 ---------- */
+  function countUp(el){
+    const target = parseFloat(el.dataset.count);
+    const dec = parseInt(el.dataset.dec || '0', 10);
+    const suffix = el.dataset.suffix || '';
+    if (!isFinite(target)) return;
+    const dur = 1000, t0 = performance.now();
+    (function frame(now){
+      const p = Math.min(1, (now - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      el.textContent = (target * e).toFixed(dec) + suffix;
+      if (p < 1) requestAnimationFrame(frame);
+      else el.textContent = target.toFixed(dec) + suffix;
+    })(t0);
+  }
+
+  /* ---------- 翻页 ---------- */
+  function render(i, keepOut){
+    const scene = scenes[i];
+    scenes.forEach((s, k) => {
+      s.classList.toggle('active', k === i);
+      if (s !== keepOut) s.classList.remove('out');
+    });
+    const ANIM = '.rise,.rule,h1 .ch,.shot,.shot img,.vram .bar i,.tl .node .dot,.eyebrow b';
+    scene.querySelectorAll(ANIM).forEach(el => { el.style.animation = 'none'; });
+    void scene.offsetWidth;
+    scene.querySelectorAll(ANIM).forEach(el => { el.style.animation = ''; });
+
+    scene.querySelectorAll('[data-count]').forEach((el, k) => {
+      setTimeout(() => countUp(el), 320 + k * 60);
+    });
+  }
+
+  function go(next){
+    next = Math.max(0, Math.min(total - 1, next));
+    if (busy || next === current) return;
+    busy = true;
+    const dir = next > current ? 1 : -1;
+    scenes[next].style.setProperty('--dir', dir);
+    sweep();
+    const prev = scenes[current];
+    prev.classList.add('out');
+    prev.classList.remove('active');
+    current = next;
+    // 立即让新页进场，与上一页退场交叉，避免中间闪黑
+    render(current, prev);
+    setTimeout(() => { busy = false; }, 400);
+  }
+
+  /* ---------- 交互 ---------- */
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(e.key)) { e.preventDefault(); go(current + 1); }
+    else if (['ArrowLeft','ArrowUp','PageUp'].includes(e.key)) { e.preventDefault(); go(current - 1); }
+    else if (e.key === 'Home') { go(0); }
+    else if (e.key === 'End') { go(total - 1); }
+    else if (e.key === 'Escape') { if (document.fullscreenElement) document.exitFullscreen(); }
+    else if (e.key.toLowerCase() === 'f') { toggleFull(); }
+    else if (e.key.toLowerCase() === 'r') { toggleAuto(); }
+  });
+
+  function toggleFull(){
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+    else document.exitFullscreen();
+  }
+
+  function toggleAuto(){
+    autoOn = !autoOn;
+    if (autoOn){
+      document.body.classList.add('hide-cursor');
+      hint.textContent = '自动播放中 · 每 7 秒翻页 · 再按 R 停止';
+      hint.classList.add('show');
+      autoTimer = setInterval(() => {
+        if (current === total - 1) { clearInterval(autoTimer); autoOn = false; return; }
+        go(current + 1);
+      }, 7000);
+    } else {
+      clearInterval(autoTimer);
+      document.body.classList.remove('hide-cursor');
+      hint.textContent = '→ 翻页 · F 全屏 · R 自动播放';
+      hint.classList.remove('show');
+    }
+  }
+
+  let wheelLock = 0;
+  window.addEventListener('wheel', (e) => {
+    const now = Date.now();
+    if (now - wheelLock < 700) return;
+    if (Math.abs(e.deltaY) < 12) return;
+    wheelLock = now;
+    go(current + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: true });
+
+  let ty = null;
+  window.addEventListener('touchstart', (e) => { ty = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchend', (e) => {
+    if (ty == null) return;
+    const dy = ty - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 46) go(current + (dy > 0 ? 1 : -1));
+    ty = null;
+  }, { passive: true });
+
+  // 极轻视差：只作用于水位字与刻度
+  const glowEl = document.getElementById('cursorGlow');
+  let px = 0, py = 0, tx = 0, tyv = 0;
+  stage.addEventListener('pointermove', (e) => {
+    const r = stage.getBoundingClientRect();
+    tx = (e.clientX - r.left) / r.width * 2 - 1;
+    tyv = (e.clientY - r.top) / r.height * 2 - 1;
+  });
+  (function loop(){
+    px += (tx - px) * .05;
+    py += (tyv - py) * .05;
+    if (glowEl) {
+      glowEl.style.transform = 'translate3d(' + ((px + 1) * 640).toFixed(1) + 'px,' + ((py + 1) * 360).toFixed(1) + 'px,0)';
+    }
+    document.querySelectorAll('.scene.active .watermark').forEach(el => {
+      el.style.transform = 'translate3d(' + (px * -10).toFixed(2) + 'px,' + (py * -8).toFixed(2) + 'px,0)';
+    });
+    document.querySelectorAll('.scene.active .gauge').forEach(el => {
+      el.style.transform = 'translate3d(' + (px * 4).toFixed(2) + 'px,' + (py * 3).toFixed(2) + 'px,0)';
+    });
+    requestAnimationFrame(loop);
+  })();
+
+  /* ---------- 初始 ---------- */
+  const qp = QS.get('p');
+  const start = Math.min(total - 1, Math.max(0, (parseInt(qp || location.hash.replace('#',''), 10) || 1) - 1));
+  if (start > 0) {
+    scenes.forEach((s, k) => s.classList.toggle('active', k === start));
+    current = start;
+  }
+  render(current);
+  setTimeout(() => sweep(), 120);
+  setTimeout(() => hint.classList.add('show'), 900);
+  setTimeout(() => { if (!autoOn) hint.classList.remove('show'); }, 5600);
+})();
+</script>
+</body>
+</html>
